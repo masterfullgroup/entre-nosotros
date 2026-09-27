@@ -1191,11 +1191,11 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
 @media(min-width:781px){.category-grid+.panel{max-width:760px}}
 
 @media(max-width:780px){
-  .member-history-row{grid-template-columns:34px minmax(0,1fr) 36px;grid-template-areas:"icon main receipt" "icon total receipt" "icon part receipt" "icon status receipt";align-items:start;gap:8px 10px;padding:14px 12px}
-  .history-main,.history-total,.history-part{min-width:0}
-  .history-total,.history-part{display:grid;justify-items:start;gap:2px}
-  .history-total small,.history-part small{display:block;font-size:11px;line-height:1.3}
-  .history-total strong,.history-part strong{display:block;margin:0;font-size:13px;line-height:1.35}
-  .history-part em{display:block;margin:0;font-size:12px;line-height:1.35;white-space:normal}
-  .member-history-row .status{grid-area:status;justify-self:start;align-self:start;max-width:100%;white-space:normal;text-align:center;font-size:11px;line-height:1.2;padding:5px 9px}
+  :root:not([data-theme="light"]) .member-history-row{grid-template-columns:34px minmax(0,1fr) 36px;grid-template-areas:"icon main receipt" "icon total receipt" "icon part receipt" "icon status status";align-items:start;gap:8px 10px;padding:14px 12px}
+  :root:not([data-theme="light"]) .history-main,:root:not([data-theme="light"]) .history-total,:root:not([data-theme="light"]) .history-part{min-width:0}
+  :root:not([data-theme="light"]) .history-total,:root:not([data-theme="light"]) .history-part{display:grid;justify-items:start;gap:2px}
+  :root:not([data-theme="light"]) .history-total small,:root:not([data-theme="light"]) .history-part small{display:block;font-size:11px;line-height:1.3}
+  :root:not([data-theme="light"]) .history-total strong,:root:not([data-theme="light"]) .history-part strong{display:block;margin:0;font-size:13px;line-height:1.35}
+  :root:not([data-theme="light"]) .history-part em{display:block;margin:0;font-size:12px;line-height:1.35;white-space:normal}
+  :root:not([data-theme="light"]) .member-history-row .status{grid-area:status;justify-self:start;align-self:start;display:inline-flex;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px;line-height:1.2;padding:5px 9px}
 }
