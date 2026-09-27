@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "ios-ui-ux-design": {
+      "source": "jx1100370217/my-openclaw-skills",
+      "sourceType": "github",
+      "skillPath": "ios-ui-ux-design/SKILL.md",
+      "computedHash": "043dc538624c576e157629c3720b5abddb6d439607df0155e7c2e48288ca64a9"
+    }
+  }
+}
