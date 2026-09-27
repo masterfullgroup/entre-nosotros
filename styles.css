@@ -1199,3 +1199,9 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
   :root:not([data-theme="light"]) .history-part em{display:block;margin:0;font-size:12px;line-height:1.35;white-space:normal}
   :root:not([data-theme="light"]) .member-history-row .status{grid-area:status;justify-self:start;align-self:start;display:inline-flex;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px;line-height:1.2;padding:5px 9px}
 }
+.top-signout{display:none}
+@media(max-width:780px){
+  .top-signout{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 12px;border:1px solid #FF00FF;border-radius:10px;background:#FF00FF;color:#FFFFFF;font-size:12px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(255,0,255,.18)}
+  .top-signout:hover{background:#E600E6;border-color:#E600E6}
+  .top-avatar.signout-icon{display:none}
+}
