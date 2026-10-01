@@ -23,6 +23,8 @@ El estado de Authentication se restaura al recargar. Después de leer `usuarios/
 
 Gastos, pagos e historial se guardan en Firestore mediante escrituras por lotes y se actualizan en las vistas con listeners `onSnapshot`. Las categorías también se sincronizan entre dispositivos. No se importan gastos, pagos ni historial de los antiguos datos locales de demostración; al iniciar la integración solo se puede conservar la definición local de categorías para inicializar `configuracion/categorias` si aún no existe.
 
+La deuda pendiente se calcula como la participación acumulada de gastos activos menos los pagos registrados y los adelantos del propio participante; no se guarda un saldo manual. En el Resumen, administración puede abrir `Registrar pago` junto a cada saldo pendiente, rellenar el monto total con `Pagar deuda total`, o introducir un pago parcial. El formulario impide superar el pendiente calculado. Los pagos mantienen su documento e ID al editarse; al eliminarlos se borran con confirmación y se registra el evento en `historial`.
+
 Las reglas deben permitir lectura autenticada de `gastos`, `pagos`, `historial` y `configuracion/categorias`, y escrituras solamente al UID cuyo documento `usuarios/{uid}` tenga `rol == "admin"`. Comprueba las reglas de cada ruta de Firestore antes de usar la aplicación. Los documentos se pueden revisar en Firebase Console → Firestore Database → Data, dentro de esas colecciones.
 
 ## Publicación
