@@ -13,27 +13,22 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Saltar al contenido</a>
-  <section class="login-screen" id="login-screen" aria-labelledby="login-title" hidden>
+  <section class="login-screen" id="login-screen" aria-labelledby="login-title">
     <form class="login-card" id="login-form">
       <span class="brand-mark login-mark" aria-hidden="true">⌂</span>
       <p class="eyebrow">ENTRE NOSOTROS</p>
       <h1 id="login-title">Iniciar sesión</h1>
-      <p class="login-copy">Elige el perfil con el que quieres ingresar.</p>
+      <p class="login-copy">Ingresa con tu usuario y contraseña.</p>
       <label class="form-field" for="login-user">Usuario</label>
-      <select class="toolbar-select" id="login-user" name="user" required>
-        <option value="gerson">Gerson · Administrador</option>
-        <option value="carlos">Maribel · Familiar</option>
-        <option value="jose">Josué · Familiar</option>
-        <option value="pedro">Benjamín · Familiar</option>
-      </select>
+      <input class="toolbar-select" id="login-user" name="user" type="text" autocomplete="username" placeholder="Tu nombre de usuario" required>
       <label class="form-field login-password-label" for="login-password">Contraseña</label>
       <div class="password-wrap"><input class="login-password" id="login-password" name="password" type="password" autocomplete="current-password" required><button class="password-toggle" id="password-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg></button></div>
       <p class="login-error" id="login-error" role="alert" hidden>El usuario o la contraseña no son correctos.</p>
-      <button class="button button-primary login-submit" type="submit">Ingresar a la demo</button>
-      <p class="login-notice">Acceso de demostración. Las contraseñas se validan localmente en este navegador.</p>
+      <button class="button button-primary login-submit" type="submit">Ingresar</button>
+      <p class="login-notice">Acceso seguro con Firebase.</p>
     </form>
   </section>
-  <div class="app-shell">
+  <div class="app-shell" hidden>
     <aside class="sidebar" aria-label="Navegación principal">
       <a class="brand" href="#dashboard" aria-label="Entre Nosotros, inicio">
         <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13.5 12 6l8 7.5M7 11v8h10v-8M10 19v-5h4v5"/></svg></span>
@@ -70,6 +65,6 @@
   </div>
   <div id="modal-root"></div>
   <div id="toast-root" aria-live="polite" aria-atomic="true"></div>
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

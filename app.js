@@ -1,11 +1,13 @@
-/* Entre Nosotros — functional local-first prototype. Supabase schema: supabase/schema.sql */
+/* Entre Nosotros — datos financieros locales; autenticación Firebase. */
+import { auth, db, usernameEmails } from './firebase.js';
+import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 const PEOPLE = [
-  { id: 'gerson', name: 'Gerson', first: 'Gerson', initials: 'GN', tone: 'sage', role: 'admin' },
-  { id: 'carlos', name: 'Maribel', first: 'Maribel', initials: 'MN', tone: 'coral', role: 'member' },
-  { id: 'jose', name: 'Josué', first: 'Josué', initials: 'JN', tone: 'lilac', role: 'member' },
-  { id: 'pedro', name: 'Benjamín', first: 'Benjamín', initials: 'BN', tone: 'sand', role: 'member' }
+  { id: 'gerson', username: 'gerson', name: 'Gerson', first: 'Gerson', initials: 'GN', tone: 'sage', role: 'admin' },
+  { id: 'carlos', username: 'maribel', name: 'Maribel', first: 'Maribel', initials: 'MN', tone: 'coral', role: 'member' },
+  { id: 'jose', username: 'josue', name: 'Josué', first: 'Josué', initials: 'JN', tone: 'lilac', role: 'member' },
+  { id: 'pedro', username: 'benjamin', name: 'Benjamín', first: 'Benjamín', initials: 'BN', tone: 'sand', role: 'member' }
 ];
-
 const CATEGORY_META = {
   Salud: { icon: '✚', tone: 'health', color: '#69a296' },
   Casa: { icon: '⌂', tone: 'home', color: '#c49b61' },
@@ -51,9 +53,11 @@ const seed = {
 };
 let store = loadStore();
 let route = location.hash.replace('#','') || 'dashboard';
-let role = 'admin';
+let role = 'lector';
 let memberId = 'carlos';
-let sessionUser = localStorage.getItem('entre-nosotros-demo-session');
+let sessionUser = null;
+let profile = null;
+let authReady = false;
 let currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 let expenseFilter = { search: '', category: '', status: '' };
 
@@ -86,12 +90,12 @@ function statusFor(e,id=memberId){const share=shareFor(e,id);if(share===0)return
 function setRoute(next){route=next;history.replaceState(null,'',`#${next}`);render()}
 function navTitle(){return ({dashboard:'Resumen',expenses:'Gastos',payments:'Aportes',reports:'Reportes',categories:'Categorías',history:'Historial',profile:'Perfil'})[route]||'Resumen'}
 function render(){
-  const signedIn=PEOPLE.some(p=>p.id===sessionUser);
+  const signedIn=authReady&&Boolean(sessionUser&&profile);
   document.getElementById('login-screen').hidden=signedIn;
   document.querySelector('.app-shell').hidden=!signedIn;
   if(!signedIn)return;
-  role=sessionUser==='gerson'?'admin':'member';
-  if(role==='member')memberId=sessionUser;
+  role=profile.rol==='admin'?'admin':'member';
+  memberId=PEOPLE.find(p=>p.username===profile.usuario)?.id||'carlos';
   const memberOnly=['categories','history','reports','payments'];
   if(role==='member'&&memberOnly.includes(route))route='dashboard';
   document.getElementById('crumb-current').textContent=role==='member'?(route==='expenses'?'Mis gastos':'Mi resumen'):navTitle();
@@ -101,8 +105,8 @@ function render(){
   });
   document.getElementById('expense-count').textContent=activeExpenses().length;
   const current=role==='admin'?person('gerson'):person(memberId);
-  document.getElementById('role-label').textContent=role==='admin'?'Administrador':'Familiar';
-  document.querySelector('.profile-button strong').textContent=current.first;
+  document.getElementById('role-label').textContent=role==='admin'?'Administrador':'Lector';
+  document.querySelector('.profile-button strong').textContent=profile.nombre;
   document.querySelector('.avatar-gerson').textContent=current.initials[0];
   document.querySelector('.top-avatar').textContent=current.initials[0];
   const host=document.getElementById('page-content');
@@ -160,7 +164,40 @@ function closeModal(){document.getElementById('modal-root').innerHTML='';documen
 function toast(message,error=false){const root=document.getElementById('toast-root');root.innerHTML=`<div class="toast${error?' error':''}" role="status">${error?'!':'✓'} &nbsp;${esc(message)}</div>`;setTimeout(()=>root.innerHTML='',3200)}
 function updateDistributionPreview(){const box=document.getElementById('distribution-preview');if(!box)return;const amount=Number(document.getElementById('expense-amount')?.value)||0;const ids=[...document.querySelectorAll('[name="participants"]:checked')].map(x=>x.value);const custom=document.getElementById('distribution')?.value==='custom';if(!ids.length){box.innerHTML='<div class="distribution-line"><span>Selecciona al menos una persona</span><strong>—</strong></div>';return}if(!custom){box.innerHTML=`${ids.map(id=>`<div class="distribution-line"><span>${person(id).first}</span><strong>${money(amount/ids.length)}</strong></div>`).join('')}<div class="distribution-line" style="border-top:1px solid #e6ebe5;margin-top:6px;padding-top:8px"><span>Total distribuido · ${ids.length} personas</span><strong>${money(amount)}</strong></div>`;return}box.innerHTML=`${ids.map(id=>`<label class="distribution-line"><span>${person(id).first}</span><input data-custom-share="${id}" type="number" min="0" step="0.01" placeholder="0.00" style="width:110px;border:1px solid #e3e8e2;border-radius:7px;padding:6px 8px;text-align:right"></label>`).join('')}<div class="distribution-line" style="border-top:1px solid #e6ebe5;margin-top:6px;padding-top:8px"><span>Debe coincidir con ${money(amount)}</span><strong id="custom-total">${money(0)}</strong></div>`}
 function exportCsv(){const rows=[['Fecha','Concepto','Categoría','Beneficiario','Pagado por','Monto total','Participantes','Comprobante'],...activeExpenses().map(e=>[e.date,e.description,e.category,e.beneficiary,person(e.paidBy).first,e.amount,e.participants.map(id=>person(id).first).join('; '),e.receipt])];const csv=rows.map(row=>row.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='gastos-familiares.csv';a.click();URL.revokeObjectURL(url);toast('Resumen descargado en CSV')}
-function signOut(){localStorage.removeItem('entre-nosotros-demo-session');sessionUser=null;closeModal();render()}
+async function signOut(){try{await firebaseSignOut(auth);closeModal()}catch(error){toast('No se pudo cerrar la sesión. Inténtalo de nuevo.',true);console.error(error)}}
+
+async function completeSignIn(user){
+  try{
+    const snapshot=await getDoc(doc(db,'usuarios',user.uid));
+    if(!snapshot.exists())throw new Error('No existe el perfil de este usuario en Firestore.');
+    const data=snapshot.data();
+    if(!data.nombre||!data.usuario||!['admin','lector'].includes(data.rol))throw new Error('El perfil de Firestore no tiene nombre, usuario y rol válidos.');
+    profile={nombre:data.nombre,usuario:String(data.usuario).trim().toLowerCase(),rol:data.rol};
+    const matchingPerson=PEOPLE.find(p=>p.username===profile.usuario);
+    if(!matchingPerson)throw new Error('El nombre de usuario no corresponde a un perfil habilitado.');
+    sessionUser=user;
+    role=profile.rol==='admin'?'admin':'member';
+    memberId=matchingPerson.id;
+    authReady=true;
+    route='dashboard';
+    history.replaceState(null,'','#dashboard');
+    render();
+  }catch(error){
+    console.error(error);
+    profile=null;sessionUser=null;role='lector';authReady=true;
+    await firebaseSignOut(auth).catch(()=>{});
+    const message=error.code==='permission-denied'?'Firestore denegó la lectura de tu perfil. Revisa las reglas de usuarios.':(error.message||'No se pudo cargar tu perfil.');
+    showLoginError(message);
+    render();
+  }
+}
+
+function showLoginError(message){const error=document.getElementById('login-error');error.textContent=message;error.hidden=false}
+
+onAuthStateChanged(auth,async user=>{
+  if(user){await completeSignIn(user);return}
+  sessionUser=null;profile=null;authReady=true;render();
+});
 
 document.addEventListener('click',e=>{
  const routeLink=e.target.closest('[data-route]');if(routeLink){e.preventDefault();setRoute(routeLink.dataset.route);return}
@@ -182,11 +219,10 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('input',e=>{if(e.target.id==='expense-search'){expenseFilter.search=e.target.value;const cursor=e.target.selectionStart;render();const input=document.getElementById('expense-search');input?.focus();input?.setSelectionRange(cursor,cursor);return}if(['expense-amount'].includes(e.target.id)||e.target.name==='participants'||e.target.dataset.customShare){updateDistributionPreview()}if(e.target.dataset.customShare){const total=[...document.querySelectorAll('[data-custom-share]')].reduce((s,x)=>s+(Number(x.value)||0),0);const out=document.getElementById('custom-total');if(out)out.textContent=money(total)}});
 document.addEventListener('change',e=>{if(e.target.id==='category-filter'){expenseFilter.category=e.target.value;render()}if(e.target.id==='distribution'||e.target.name==='participants'||e.target.id==='expense-category'){if(e.target.id==='expense-category'){const c=store.categories.find(x=>x.name===e.target.value);const sub=document.getElementById('expense-subcategory');if(sub)sub.innerHTML=(c?.subs||[]).map(s=>`<option>${esc(s)}</option>`).join('')}updateDistributionPreview()}if(e.target.id==='payment-person-filter'){const personFilter=e.target.value;document.getElementById('payment-list').innerHTML=paymentRows([...store.payments].filter(p=>!personFilter||p.personId===personFilter).sort((a,b)=>b.date.localeCompare(a.date)))}});
-document.addEventListener('submit',e=>{
- if(e.target.id==='login-form'){e.preventDefault();const fd=new FormData(e.target),user=fd.get('user'),password=String(fd.get('password')||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),error=document.getElementById('login-error');if(!PEOPLE.some(p=>p.id===user)||password!==DEMO_PASSWORDS[user]){error.hidden=false;e.target.elements.password.value='';e.target.elements.password.focus();return}error.hidden=true;e.target.elements.password.value='';sessionUser=user;localStorage.setItem('entre-nosotros-demo-session',user);role=user==='gerson'?'admin':'member';if(role==='member')memberId=user;route='dashboard';history.replaceState(null,'','#dashboard');render();return}
+document.addEventListener('submit',async e=>{
+ if(e.target.id==='login-form'){e.preventDefault();const form=e.target,username=String(new FormData(form).get('user')||'').trim().toLowerCase(),password=String(new FormData(form).get('password')||''),email=usernameEmails[username],error=document.getElementById('login-error');error.hidden=true;if(!email){showLoginError('Escribe uno de los usuarios habilitados: gerson, maribel, josue o benjamin.');return}const button=form.querySelector('[type="submit"]');button.disabled=true;button.textContent='Ingresando…';try{await setPersistence(auth,browserLocalPersistence);await signInWithEmailAndPassword(auth,email,password);form.elements.password.value=''}catch(err){console.error(err);showLoginError(err.code==='auth/invalid-credential'||err.code==='auth/user-not-found'||err.code==='auth/wrong-password'?'El usuario o la contraseña no son correctos.':'No se pudo iniciar sesión. Revisa tu conexión e inténtalo de nuevo.')}finally{button.disabled=false;button.textContent='Ingresar'}}
  if(e.target.id==='expense-form'){e.preventDefault();const fd=new FormData(e.target),amount=Number(fd.get('amount')),participants=fd.getAll('participants');if(!participants.length){toast('Selecciona al menos un participante.',true);return}let allocations={};if(fd.get('distribution')==='custom'){let sum=0;for(const id of participants){const val=Number(document.querySelector(`[data-custom-share="${id}"]`)?.value)||0;if(val<0){toast('Las participaciones no pueden ser negativas.',true);return}allocations[id]=val;sum+=val}if(Math.abs(sum-amount)>.01){toast(`La distribución suma ${money(sum)} y debe ser ${money(amount)}.`,true);return}}const item={id:`e${Date.now()}`,date:fd.get('date'),createdAt:new Date().toISOString(),description:fd.get('description').trim(),category:fd.get('category'),subcategory:fd.get('subcategory'),beneficiary:fd.get('beneficiary'),amount,paidBy:fd.get('paidBy'),participants,distribution:fd.get('distribution'),...(Object.keys(allocations).length?{allocations}:{}),receipt:fd.get('receipt'),notes:fd.get('notes').trim(),active:true};if(!item.description||amount<=0){toast('Completa el concepto y un monto mayor que cero.',true);return}store.expenses.unshift(item);addHistory('expense',`${person(role==='admin'?'gerson':memberId).first} registró “${item.description}”.`);if(item.receipt)addHistory('receipt',`Se agregó un comprobante a “${item.description}”.`);saveStore();closeModal();render();toast('El gasto se guardó correctamente.');return}
  if(e.target.id==='payment-form'){e.preventDefault();const fd=new FormData(e.target),item={id:`p${Date.now()}`,personId:fd.get('personId'),date:fd.get('date'),amount:Number(fd.get('amount')),method:fd.get('method'),note:fd.get('note').trim(),receipt:fd.get('receipt')};if(item.amount<=0){toast('Ingresa un monto mayor que cero.',true);return}store.payments.unshift(item);addHistory('payment',`Se registró un aporte de ${person(item.personId).first} por ${money(item.amount)}.`);if(item.receipt)addHistory('receipt',`Se agregó el comprobante de un aporte de ${person(item.personId).first}.`);saveStore();closeModal();render();toast(`Aporte de ${money(item.amount)} registrado.`);return}
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if(e.key==='Tab'){const modal=document.querySelector('#modal-root .modal');if(!modal)return;const focusable=[...modal.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')];if(!focusable.length)return;if(e.shiftKey&&document.activeElement===focusable[0]){e.preventDefault();focusable.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===focusable.at(-1)){e.preventDefault();focusable[0].focus()}}});
 window.addEventListener('hashchange',()=>{route=location.hash.replace('#','')||'dashboard';render()});
-render();
