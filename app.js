@@ -5,7 +5,7 @@ const PEOPLE = [
   { id: 'jose', name: 'Josué', first: 'Josué', initials: 'JN', tone: 'lilac', role: 'member' },
   { id: 'pedro', name: 'Benjamín', first: 'Benjamín', initials: 'BN', tone: 'sand', role: 'member' }
 ];
-const DEMO_PASSWORDS = { gerson: '654321gerson', carlos: 'maribel', jose: 'josue', pedro: 'benjamin' };
+
 const CATEGORY_META = {
   Salud: { icon: '✚', tone: 'health', color: '#69a296' },
   Casa: { icon: '⌂', tone: 'home', color: '#c49b61' },
