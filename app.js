@@ -1,7 +1,7 @@
-/* Entre Nosotros — datos financieros locales; autenticación Firebase. */
+/* Entre Nosotros — finanzas compartidas con Firestore y autenticación Firebase. */
 import { auth, db, usernameEmails } from './firebase.js';
 import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
-import { doc, getDoc } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { collection, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 const PEOPLE = [
   { id: 'gerson', username: 'gerson', name: 'Gerson', first: 'Gerson', initials: 'GN', tone: 'sage', role: 'admin' },
   { id: 'carlos', username: 'maribel', name: 'Maribel', first: 'Maribel', initials: 'MN', tone: 'coral', role: 'member' },
@@ -21,34 +21,57 @@ const DEFAULT_CATEGORIES = [
 const today = new Date();
 const STORE_KEY = 'entre-nosotros-v2';
 const LEGACY_STORE_KEY = 'entre-nosotros-v1';
-let store = loadStore();
+const initialCategories = loadLocalCategories();
+let store = emptyStore(initialCategories);
 let route = location.hash.replace('#','') || 'dashboard';
 let role = 'lector';
 let memberId = 'carlos';
 let sessionUser = null;
 let profile = null;
 let authReady = false;
+let dataReady = false;
+let dataSyncError = '';
+let stopDataListeners = [];
+let peopleUids = {};
+let dataSessionUid = null;
 let currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 let expenseFilter = { search: '', category: '', status: '' };
 
 function emptyStore(categories=DEFAULT_CATEGORIES){return{expenses:[],payments:[],categories:structuredClone(categories),history:[]}}
-function loadStore(){
-  try{
-    const savedText=localStorage.getItem(STORE_KEY);
-    if(savedText){
-      const saved=JSON.parse(savedText);
-      localStorage.removeItem(LEGACY_STORE_KEY);
-      return{...emptyStore(Array.isArray(saved.categories)?saved.categories:DEFAULT_CATEGORIES),...saved,expenses:Array.isArray(saved.expenses)?saved.expenses:[],payments:Array.isArray(saved.payments)?saved.payments:[],history:Array.isArray(saved.history)?saved.history:[]};
-    }
-    const oldText=localStorage.getItem(LEGACY_STORE_KEY);
-    const oldStore=oldText?JSON.parse(oldText):null;
-    const clean=emptyStore(Array.isArray(oldStore?.categories)?oldStore.categories:DEFAULT_CATEGORIES);
-    localStorage.setItem(STORE_KEY,JSON.stringify(clean));
-    localStorage.removeItem(LEGACY_STORE_KEY);
-    return clean;
-  }catch{return emptyStore()}
+function loadLocalCategories(){
+  let categories=DEFAULT_CATEGORIES;
+  for(const key of [STORE_KEY,LEGACY_STORE_KEY]){
+    try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(saved?.categories))categories=saved.categories;localStorage.removeItem(key)}catch{}
+  }
+  return categories;
 }
-function saveStore(){ localStorage.setItem(STORE_KEY,JSON.stringify(store)); const s=document.querySelector('.sync-status'); if(s){s.innerHTML='<i></i> Datos guardados';} }
+function syncStatus(text='Datos sincronizados',error=false){const status=document.querySelector('.sync-status');if(status){status.innerHTML=`<i></i> ${esc(text)}`;status.classList.toggle('error',error)}}
+function historyEntry(type,text,actor){const now=new Date();return{id:doc(collection(db,'historial')).id,type,text,date:now.toISOString().slice(0,10),time:new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit'}).format(now),createdAt:now.toISOString(),actorUid:sessionUser?.uid||'',actorUsername:profile?.usuario||'',actorName:profile?.nombre||'',...actor}}
+function startDataSync(user,bootstrapCategories){
+  stopDataListeners.forEach(stop=>stop());stopDataListeners=[];dataReady=false;dataSyncError='';dataSessionUid=user.uid;store.expenses=[];store.payments=[];store.history=[];store.categories=structuredClone(bootstrapCategories);peopleUids={};
+  const initial={gastos:false,pagos:false,historial:false,categorias:false,usuarios:false};
+  const finish=(key,apply)=>snapshot=>{if(dataSessionUid!==user.uid)return;apply(snapshot);initial[key]=true;syncStatus(Object.values(initial).every(Boolean)?'Datos sincronizados':'Sincronizando…');if(Object.values(initial).every(Boolean))dataReady=true;render()};
+  stopDataListeners.push(onSnapshot(collection(db,'gastos'),finish('gastos',snapshot=>{store.expenses=snapshot.docs.map(item=>({...item.data(),id:item.id}))}),error=>handleSyncError(error)));
+  stopDataListeners.push(onSnapshot(collection(db,'pagos'),finish('pagos',snapshot=>{store.payments=snapshot.docs.map(item=>({...item.data(),id:item.id}))}),error=>handleSyncError(error)));
+  stopDataListeners.push(onSnapshot(collection(db,'historial'),snapshot=>{if(dataSessionUid!==user.uid)return;store.history=snapshot.docs.map(item=>({...item.data(),id:item.id})).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));initial.historial=true;syncStatus(Object.values(initial).every(Boolean)?'Datos sincronizados':'Sincronizando…');if(Object.values(initial).every(Boolean))dataReady=true;render()},error=>handleSyncError(error)));
+  stopDataListeners.push(onSnapshot(doc(db,'configuracion','categorias'),snapshot=>{if(dataSessionUid!==user.uid)return;if(snapshot.exists()&&Array.isArray(snapshot.data().items))store.categories=snapshot.data().items;else{store.categories=structuredClone(bootstrapCategories);if(profile?.rol==='admin')setDoc(doc(db,'configuracion','categorias'),{items:store.categories,updatedAt:new Date().toISOString(),updatedByUid:user.uid}).catch(handleWriteError)}initial.categorias=true;syncStatus(Object.values(initial).every(Boolean)?'Datos sincronizados':'Sincronizando…');if(Object.values(initial).every(Boolean))dataReady=true;render()},error=>handleSyncError(error)));
+  getDocs(collection(db,'usuarios')).then(snapshot=>{if(dataSessionUid!==user.uid)return;peopleUids=Object.fromEntries(snapshot.docs.map(item=>[String(item.data().usuario||'').toLowerCase(),item.id]));initial.usuarios=true;if(Object.values(initial).every(Boolean))dataReady=true;render()}).catch(error=>{console.warn('No se pudieron cargar los UID de usuarios para relacionar los pagos.',error);initial.usuarios=true;if(Object.values(initial).every(Boolean))dataReady=true;render()});
+}
+function handleSyncError(error){console.error('Error sincronizando Firestore:',error);dataSyncError='No se pudieron cargar los datos compartidos. Revisa tu conexión y las reglas de Firestore, y vuelve a cargar la página.';syncStatus('Error de sincronización',true);render();if(error.code==='permission-denied')toast('Firestore denegó el acceso. Revisa las reglas de las colecciones compartidas.',true)}
+function handleWriteError(error){console.error('Error guardando en Firestore:',error);syncStatus('Error al guardar',true);toast(error.code==='permission-denied'?'Firestore denegó esta operación. Revisa las reglas y el rol de administrador.':'No se pudo guardar en Firestore. Revisa tu conexión e inténtalo de nuevo.',true)}
+async function saveCloudRecord(collectionName,item,type,text,previousId=null,extraHistory=[]){
+  const batch=writeBatch(db),ref=doc(db,collectionName,item.id),now=new Date().toISOString();
+  batch.set(ref,{...item,id:item.id,createdAt:item.createdAt||now,updatedAt:now,createdByUid:item.createdByUid||sessionUser.uid,createdByUsername:item.createdByUsername||profile.usuario,updatedByUid:sessionUser.uid,updatedByUsername:profile.usuario});
+  const entries=[historyEntry(type,text,{entityId:item.id,action:previousId?'edit':'create'}),...extraHistory.map(([entryType,entryText])=>historyEntry(entryType,entryText,{entityId:item.id,action:'create'}))];
+  entries.forEach(entry=>batch.set(doc(db,'historial',entry.id),entry));
+  await batch.commit();syncStatus();
+}
+async function deleteCloudRecord(collectionName,item,type,text){
+  const batch=writeBatch(db);batch.delete(doc(db,collectionName,item.id));const entry=historyEntry(type,text,{entityId:item.id,action:'delete'});batch.set(doc(db,'historial',entry.id),entry);await batch.commit();syncStatus();
+}
+async function saveCategoriesToCloud(text){
+  const batch=writeBatch(db),entry=historyEntry('category',text);batch.set(doc(db,'configuracion','categorias'),{items:store.categories,updatedAt:new Date().toISOString(),updatedByUid:sessionUser.uid});batch.set(doc(db,'historial',entry.id),entry);await batch.commit();syncStatus();
+}
 function person(id){return PEOPLE.find(p=>p.id===id)||PEOPLE[0]}
 function money(n){return new Intl.NumberFormat('es-PE',{style:'currency',currency:'PEN',minimumFractionDigits:2}).format(Number(n)||0).replace('PEN','S/')}
 function compactMoney(n){return `S/ ${Math.round(Number(n)||0).toLocaleString('es-PE')}`}
@@ -70,7 +93,6 @@ function paidOnExpense(expense,id){
 function recovered(){return store.payments.reduce((s,p)=>s+Number(p.amount),0)}
 function totalExpenses(list=activeExpenses()){return list.reduce((s,e)=>s+Number(e.amount),0)}
 function monthExpenses(date=currentMonth){return activeExpenses().filter(e=>{const d=new Date(`${e.date}T12:00:00`);return d.getMonth()===date.getMonth()&&d.getFullYear()===date.getFullYear()})}
-function addHistory(type,text){store.history.unshift({id:`h${Date.now()}`,type,text,date:new Date().toISOString().slice(0,10),time:new Intl.DateTimeFormat('es-PE',{hour:'2-digit',minute:'2-digit'}).format(new Date())})}
 function iconClass(category){return CATEGORY_META[category]||CATEGORY_META.Otros}
 function statusFor(e,id=memberId){const share=shareFor(e,id);if(share===0)return 'Sin parte';const paid=paidOnExpense(e,id);return paid>=share?'Pagado':paid>0?'Parcial':'Pendiente'}
 function setRoute(next){route=next;history.replaceState(null,'',`#${next}`);render()}
@@ -96,6 +118,8 @@ function render(){
   document.querySelector('.avatar-gerson').textContent=current.initials[0];
   document.querySelector('.top-avatar').textContent=current.initials[0];
   const host=document.getElementById('page-content');
+  if(dataSyncError){host.innerHTML=`<div class="empty-state"><span class="empty-icon">!</span><strong>Error de sincronización</strong><p>${esc(dataSyncError)}</p></div>`;document.getElementById('mobile-add').classList.add('hidden');return}
+  if(!dataReady){host.innerHTML='<div class="empty-state"><span class="empty-icon">◷</span><strong>Sincronizando datos</strong><p>Los datos compartidos de la familia se están cargando.</p></div>';document.getElementById('mobile-add').classList.add('hidden');return}
   if(role==='member')host.innerHTML=route==='expenses'?renderMemberExpenses():renderMember();
   else switch(route){case'expenses':host.innerHTML=renderExpenses();break;case'payments':host.innerHTML=renderPayments();break;case'reports':host.innerHTML=renderReports();break;case'categories':host.innerHTML=renderCategories();break;case'history':host.innerHTML=renderHistory();break;case'profile':host.innerHTML=renderMember();break;default:host.innerHTML=renderDashboard()}
   document.querySelectorAll('.mobile-nav [data-route="payments"],.mobile-nav [data-route="profile"]').forEach(a=>a.classList.toggle('hidden',role==='member'));
@@ -208,6 +232,7 @@ async function completeSignIn(user){
     role=profile.rol==='admin'?'admin':'member';
     memberId=matchingPerson.id;
     authReady=true;
+    startDataSync(user,store.categories);
     route='dashboard';
     history.replaceState(null,'','#dashboard');
     render();
@@ -225,10 +250,11 @@ function showLoginError(message){const error=document.getElementById('login-erro
 
 onAuthStateChanged(auth,async user=>{
   if(user){await completeSignIn(user);return}
+  stopDataListeners.forEach(stop=>stop());stopDataListeners=[];dataSessionUid=null;dataReady=false;dataSyncError='';store=emptyStore(initialCategories);
   sessionUser=null;profile=null;authReady=true;render();
 });
 
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
  const routeLink=e.target.closest('[data-route]');if(routeLink){e.preventDefault();setRoute(routeLink.dataset.route);return}
  const innerRoute=e.target.closest('[data-route-link]');if(innerRoute){setRoute(innerRoute.dataset.routeLink);return}
  const actionButton=e.target.closest('[data-action]');const action=actionButton?.dataset.action;
@@ -243,8 +269,8 @@ document.addEventListener('click',e=>{
     const linkedExpenses=store.expenses.filter(expense=>expense.category===category&&expense.subcategory===subcategory).length;
     const historyNote=linkedExpenses?` ${linkedExpenses} gasto(s) anterior(es) conservarán su referencia.`:'';
     if(!window.confirm(`¿Eliminar la subcategoría “${subcategory}” de ${category}?${historyNote}`))return;
-    categoryItem.subs=categoryItem.subs.filter(item=>item!==subcategory);
-    addHistory('category',`Gerson eliminó la subcategoría “${subcategory}” de ${category}.`);saveStore();render();toast('Subcategoría eliminada.');return;
+    const previousCategories=structuredClone(store.categories);categoryItem.subs=categoryItem.subs.filter(item=>item!==subcategory);
+    try{await saveCategoriesToCloud(`Gerson eliminó la subcategoría “${subcategory}” de ${category}.`);render();toast('Subcategoría eliminada.')}catch(error){store.categories=previousCategories;handleWriteError(error)}return;
   }
   if(action==='edit-expense'||action==='delete-expense'||action==='edit-payment'||action==='delete-payment'){
    if(role!=='admin'){toast('Solo administración puede realizar esta acción.',true);return}
@@ -254,11 +280,11 @@ document.addEventListener('click',e=>{
    if(action==='delete-expense'){
      const item=store.expenses.find(expense=>expense.id===id);if(!item)return;
      if(!window.confirm(`¿Eliminar el gasto “${item.description}”? Esta acción no se puede deshacer.`))return;
-     store.expenses=store.expenses.filter(expense=>expense.id!==id);addHistory('expense',`Gerson eliminó el gasto “${item.description}”.`);saveStore();render();toast('Gasto eliminado.');return;
+      try{await deleteCloudRecord('gastos',item,'expense',`Gerson eliminó el gasto “${item.description}”.`);toast('Gasto eliminado.')}catch(error){handleWriteError(error)}return;
    }
    const item=store.payments.find(payment=>payment.id===id);if(!item)return;
    if(!window.confirm(`¿Eliminar el pago de ${person(item.personId).first} por ${money(item.amount)}? Esta acción no se puede deshacer.`))return;
-   store.payments=store.payments.filter(payment=>payment.id!==id);addHistory('payment',`Gerson eliminó un pago de ${person(item.personId).first} por ${money(item.amount)}.`);saveStore();render();toast('Pago eliminado.');return;
+    try{await deleteCloudRecord('pagos',item,'payment',`Gerson eliminó un pago de ${person(item.personId).first} por ${money(item.amount)}.`);toast('Pago eliminado.')}catch(error){handleWriteError(error)}return;
  }
  const actionSummary=e.target.closest('.row-actions>summary');
  if(actionSummary){
@@ -270,8 +296,8 @@ document.addEventListener('click',e=>{
  if(!e.target.closest('.row-actions'))document.querySelectorAll('.row-actions[open]').forEach(item=>item.open=false);
  if(e.target.closest('.row-actions'))return;
  if(action==='export'){exportCsv();return}
- if(action==='new-category'){const name=prompt('Nombre de la nueva categoría:');if(name?.trim()){if(store.categories.some(c=>c.name.toLowerCase()===name.trim().toLowerCase())){toast('Esa categoría ya existe.',true);return}store.categories.push({name:name.trim(),subs:[]});addHistory('category',`Gerson creó la categoría “${name.trim()}”.`);saveStore();render();toast('Categoría creada')}return}
- if(action==='add-subcategory'){const name=prompt(`Nueva subcategoría para ${e.target.closest('[data-category]').dataset.category}:`);if(name?.trim()){const c=store.categories.find(x=>x.name===e.target.closest('[data-category]').dataset.category);c.subs.push(name.trim());addHistory('category',`Se agregó la subcategoría “${name.trim()}”.`);saveStore();render();toast('Subcategoría agregada')}return}
+ if(action==='new-category'){if(role!=='admin'){toast('Solo administración puede modificar categorías.',true);return}const name=prompt('Nombre de la nueva categoría:');if(name?.trim()){if(store.categories.some(c=>c.name.toLowerCase()===name.trim().toLowerCase())){toast('Esa categoría ya existe.',true);return}const previousCategories=structuredClone(store.categories);store.categories.push({name:name.trim(),subs:[]});try{await saveCategoriesToCloud(`Gerson creó la categoría “${name.trim()}”.`);render();toast('Categoría creada')}catch(error){store.categories=previousCategories;handleWriteError(error)}}return}
+ if(action==='add-subcategory'){if(role!=='admin'){toast('Solo administración puede modificar categorías.',true);return}const categoryName=e.target.closest('[data-category]').dataset.category,name=prompt(`Nueva subcategoría para ${categoryName}:`);if(name?.trim()){const c=store.categories.find(x=>x.name===categoryName);if(!c)return;if(c.subs.some(sub=>sub.toLowerCase()===name.trim().toLowerCase())){toast('Esa subcategoría ya existe.',true);return}const previousCategories=structuredClone(store.categories);c.subs.push(name.trim());try{await saveCategoriesToCloud(`Gerson agregó la subcategoría “${name.trim()}” a ${categoryName}.`);render();toast('Subcategoría agregada')}catch(error){store.categories=previousCategories;handleWriteError(error)}}return}
  if(e.target.closest('[data-close="true"]')){if(e.target.closest('.modal')&&!e.target.closest('.modal-close')&&!e.target.closest('[type="button"]'))return;closeModal();return}
  const month=e.target.closest('[data-month]')?.dataset.month;if(month){currentMonth=new Date(currentMonth.getFullYear(),currentMonth.getMonth()+(month==='next'?1:-1),1);render();return}
  const receiptLink=e.target.closest('a.receipt-link');if(receiptLink){if(receiptLink.dataset.noReceipt)e.preventDefault();return}
@@ -300,22 +326,20 @@ document.addEventListener('submit',async e=>{
      if(Math.abs(sum-amount)>.01){toast(`La distribución suma ${money(sum)} y debe ser ${money(amount)}.`,true);return}
    }
    if(!String(fd.get('description')||'').trim()||amount<=0){toast('Completa el concepto y un monto mayor que cero.',true);return}
-   const item={id:previous?.id||`e${Date.now()}`,date:fd.get('date'),createdAt:previous?.createdAt||new Date().toISOString(),description:String(fd.get('description')).trim(),category:fd.get('category'),subcategory:fd.get('subcategory'),beneficiary:fd.get('beneficiary'),amount,paidBy:fd.get('paidBy'),participants,distribution:fd.get('distribution'),receipt:fd.get('receipt'),notes:String(fd.get('notes')||'').trim(),active:true};
+    const paidBy=fd.get('paidBy'),item={id:previous?.id||doc(collection(db,'gastos')).id,date:fd.get('date'),createdAt:previous?.createdAt||new Date().toISOString(),createdByUid:previous?.createdByUid||sessionUser.uid,createdByUsername:previous?.createdByUsername||profile.usuario,description:String(fd.get('description')).trim(),category:fd.get('category'),subcategory:fd.get('subcategory'),beneficiary:fd.get('beneficiary'),amount,paidBy,paidByUsername:person(paidBy).username,paidByUid:peopleUids[person(paidBy).username]||null,participants,participantUsernames:participants.map(id=>person(id).username),participantUids:Object.fromEntries(participants.map(id=>[person(id).username,peopleUids[person(id).username]||null])),distribution:fd.get('distribution'),receipt:fd.get('receipt'),notes:String(fd.get('notes')||'').trim(),active:true,status:'active'};
    if(Object.keys(allocations).length)item.allocations=allocations;
-   if(previous){store.expenses[store.expenses.findIndex(expense=>expense.id===editId)]=item;addHistory('expense',`Gerson editó el gasto “${item.description}”.`)}else{store.expenses.unshift(item);addHistory('expense',`Gerson registró “${item.description}”.`)}
-   if(item.receipt&&item.receipt!==previous?.receipt)addHistory('receipt',`Se agregó un comprobante a “${item.description}”.`);
-   saveStore();closeModal();render();toast(previous?'Gasto actualizado.':'El gasto se guardó correctamente.');return;
+    const historyText=previous?`Gerson editó el gasto “${item.description}”.`:`Gerson registró “${item.description}”.`,extraHistory=item.receipt&&item.receipt!==previous?.receipt?[['receipt',`Se agregó un comprobante a “${item.description}”.`]]:[];
+    try{await saveCloudRecord('gastos',item,'expense',historyText,previous?.id,extraHistory);closeModal();toast(previous?'Gasto actualizado.':'El gasto se guardó correctamente.')}catch(error){handleWriteError(error)}return;
  }
  if(e.target.id==='payment-form'){
    e.preventDefault();if(role!=='admin'){toast('Solo administración puede registrar o editar pagos.',true);return}
-   const form=e.target,fd=new FormData(form),editId=form.dataset.editId,previous=editId?store.payments.find(item=>item.id===editId):null,item={id:previous?.id||`p${Date.now()}`,personId:fd.get('personId'),date:fd.get('date'),amount:Number(fd.get('amount')),method:fd.get('method'),note:String(fd.get('note')||'').trim(),receipt:fd.get('receipt')};
+    const form=e.target,fd=new FormData(form),editId=form.dataset.editId,previous=editId?store.payments.find(item=>item.id===editId):null,personId=fd.get('personId'),paymentPerson=person(personId),item={id:previous?.id||doc(collection(db,'pagos')).id,personId,personUsername:paymentPerson.username,personUid:peopleUids[paymentPerson.username]||null,date:fd.get('date'),amount:Number(fd.get('amount')),method:fd.get('method'),concept:String(fd.get('note')||'').trim()||'Aporte',note:String(fd.get('note')||'').trim(),receipt:fd.get('receipt'),createdAt:previous?.createdAt,createdByUid:previous?.createdByUid||sessionUser.uid,createdByUsername:previous?.createdByUsername||profile.usuario};
    if(editId&&!previous){toast('No se encontró el pago que intentas editar.',true);return}
    if(item.amount<=0){toast('Ingresa un monto mayor que cero.',true);return}
    const available=pendingFor(item.personId)+(previous?.personId===item.personId?Number(previous.amount):0);
    if(item.amount>available+.005){toast(`El pago supera el saldo pendiente de ${money(available)}.`,true);return}
-   if(previous){store.payments[store.payments.findIndex(payment=>payment.id===editId)]=item;addHistory('payment',`Gerson editó un pago de ${person(item.personId).first} por ${money(item.amount)}.`)}else{store.payments.unshift(item);addHistory('payment',`Se registró un pago de ${person(item.personId).first} por ${money(item.amount)}.`)}
-   if(item.receipt&&item.receipt!==previous?.receipt)addHistory('receipt',`Se agregó el comprobante de un pago de ${person(item.personId).first}.`);
-   saveStore();closeModal();render();toast(previous?'Pago actualizado.':`Pago de ${money(item.amount)} registrado.`);return;
+    const historyText=previous?`Gerson editó un pago de ${paymentPerson.first} por ${money(item.amount)}.`:`Se registró un pago de ${paymentPerson.first} por ${money(item.amount)}.`,extraHistory=item.receipt&&item.receipt!==previous?.receipt?[['receipt',`Se agregó el comprobante de un pago de ${paymentPerson.first}.`]]:[];
+    try{await saveCloudRecord('pagos',item,'payment',historyText,previous?.id,extraHistory);closeModal();toast(previous?'Pago actualizado.':`Pago de ${money(item.amount)} registrado.`)}catch(error){handleWriteError(error)}return;
  }
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();if(e.key==='Tab'){const modal=document.querySelector('#modal-root .modal');if(!modal)return;const focusable=[...modal.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])')];if(!focusable.length)return;if(e.shiftKey&&document.activeElement===focusable[0]){e.preventDefault();focusable.at(-1).focus()}else if(!e.shiftKey&&document.activeElement===focusable.at(-1)){e.preventDefault();focusable[0].focus()}}});
