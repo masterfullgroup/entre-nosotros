@@ -1,6 +1,6 @@
 /* Entre Nosotros — finanzas compartidas con Firestore y autenticación Firebase. */
 import { auth, db, usernameEmails } from './firebase.js';
-import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
+import { signInWithEmailAndPassword, signOut as firebaseSignOut, onAuthStateChanged, setPersistence, browserLocalPersistence, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { collection, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 const PEOPLE = [
   { id: 'gerson', username: 'gerson', name: 'Gerson', first: 'Gerson', initials: 'GN', tone: 'sage', role: 'admin' },
@@ -115,7 +115,7 @@ function render(){
   });
   document.getElementById('expense-count').textContent=activeExpenses().length;
   const current=role==='admin'?person('gerson'):person(memberId);
-  document.getElementById('role-label').textContent=role==='admin'?'Administrador':'Lector';
+  document.getElementById('role-label').textContent='Mi cuenta';
   document.querySelector('.profile-button strong').textContent=profile.nombre;
   document.querySelector('.avatar-gerson').textContent=current.initials[0];
   document.querySelector('.top-avatar').textContent=current.initials[0];
@@ -132,7 +132,7 @@ function render(){
       if(balance>0){const button=document.createElement('button');button.type='button';button.className='text-link';button.dataset.action='new-payment';button.dataset.personId=personItem.id;button.textContent='Registrar pago';row.insertBefore(button,amount)}
     });
   }
-  document.querySelectorAll('.mobile-nav [data-route="payments"],.mobile-nav [data-route="profile"]').forEach(a=>a.classList.toggle('hidden',role==='member'));
+  document.querySelectorAll('.mobile-nav [data-route="payments"]').forEach(a=>a.classList.toggle('hidden',role==='member'));
   document.getElementById('mobile-add').classList.toggle('hidden',role==='member');
 }
 function heading(title,subtitle,actions=''){return `<div class="page-heading"><div><p class="eyebrow">${role==='admin'?'FINANZAS COMPARTIDAS':'TU ESPACIO'}</p><h1>${title}</h1><p class="page-subtitle">${subtitle}</p></div><div class="heading-actions">${actions}</div></div>`}
@@ -215,6 +215,8 @@ function detailModal(id){const e=store.expenses.find(x=>x.id===id);if(!e)return'
 function driveFilePreviewUrl(sharedUrl){try{const url=new URL(sharedUrl);if(url.protocol!=='https:')return null;const isDrive=url.hostname==='drive.google.com'||url.hostname==='www.drive.google.com';if(!isDrive)return{fileId:'',previewUrl:url.href};const pathMatch=url.pathname.match(/\/file\/d\/([^/]+)/),fileId=pathMatch?.[1]||url.searchParams.get('id');if(!fileId)return{fileId:'',previewUrl:url.href};return{fileId,previewUrl:`https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview`}}catch{return null}}
 function receiptViewerModal({receipt,description,amount,date}){const preview=driveFilePreviewUrl(receipt);if(!preview)return'';const fallbackUrl=preview.previewUrl;return `<div class="modal-backdrop" data-close="true"><section class="modal receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-title" tabindex="-1"><header class="modal-header"><div><h2 id="receipt-modal-title">Comprobante</h2></div><button class="modal-close" data-close="true" aria-label="Cerrar">×</button></header><div class="receipt-viewer">${preview.fileId?`<iframe class="receipt-frame" src="${esc(preview.previewUrl)}" title="Comprobante: ${esc(description)}" allow="autoplay" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`:`<p class="receipt-unavailable">No se pudo preparar la vista previa de este enlace.</p>`}</div><div class="receipt-details"><strong>${esc(description)}</strong><span>${money(amount)} · ${dateLabel(date,{day:'2-digit',month:'long',year:'numeric'})}</span></div><footer class="modal-footer"><a class="button button-quiet" href="${esc(fallbackUrl)}" target="_blank" rel="noopener noreferrer">Abrir en el navegador ↗</a><button type="button" class="button button-primary" data-close="true">Cerrar</button></footer></section></div>`}
 function showModal(html){const root=document.getElementById('modal-root');root.innerHTML=html;root.querySelector('.modal')?.focus();document.body.style.overflow='hidden';const first=root.querySelector('input,select,textarea,button');first?.focus();updateDistributionPreview()}
+function accountModal(){return `<div class="modal-backdrop" data-close="true"><section class="modal account-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><header class="modal-header"><div><p class="eyebrow">MI CUENTA</p><h2 id="modal-title">Cambiar contraseña</h2><p>Actualiza la contraseña de tu propio usuario.</p></div><button class="modal-close" data-close="true" aria-label="Cerrar">×</button></header><form id="password-form"><div class="modal-body"><div class="account-password-fields"><div class="form-field"><label for="current-password">Contraseña actual</label><input id="current-password" name="currentPassword" type="password" autocomplete="current-password" required></div><div class="form-field"><label for="new-password">Nueva contraseña</label><input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="6" required></div><div class="form-field"><label for="confirm-password">Confirmar nueva contraseña</label><input id="confirm-password" name="confirmPassword" type="password" autocomplete="new-password" minlength="6" required></div></div><p class="password-form-error" id="password-form-error" role="alert" hidden></p></div><footer class="modal-footer"><button type="button" class="button" data-close="true">Cancelar</button><button type="submit" class="button button-primary">Cambiar contraseña</button></footer></form></section></div>`}
+function passwordErrorMessage(code){if(code==='auth/wrong-password'||code==='auth/invalid-credential')return'La contraseña actual es incorrecta.';if(code==='auth/weak-password'||code==='auth/password-does-not-meet-requirements')return'La nueva contraseña es demasiado débil.';if(code==='auth/requires-recent-login')return'Vuelve a iniciar sesión e inténtalo de nuevo.';return'No se pudo actualizar la contraseña. Inténtalo de nuevo.'}
 function closeModal(){document.getElementById('modal-root').innerHTML='';document.body.style.overflow=''}
 function toast(message,error=false){const root=document.getElementById('toast-root');root.innerHTML=`<div class="toast${error?' error':''}" role="status">${error?'!':'✓'} &nbsp;${esc(message)}</div>`;setTimeout(()=>root.innerHTML='',3200)}
 function updateDistributionPreview(){
@@ -272,6 +274,7 @@ document.addEventListener('click',async e=>{
  const innerRoute=e.target.closest('[data-route-link]');if(innerRoute){setRoute(innerRoute.dataset.routeLink);return}
  const actionButton=e.target.closest('[data-action]');const action=actionButton?.dataset.action;
  if(action==='signout'){signOut();return}
+ if(action==='account'){if(!auth.currentUser){toast('Inicia sesión para acceder a tu cuenta.',true);return}showModal(accountModal());return}
  if(action==='view-receipt'){
    const id=actionButton.dataset.id,kind=actionButton.dataset.kind,item=kind==='payment'?store.payments.find(record=>record.id===id):store.expenses.find(record=>record.id===id);
    if(!item?.receipt)return;
@@ -336,6 +339,21 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('input',e=>{if(e.target.name==='amount'&&e.target.closest('#payment-form')){const full=e.target.closest('#payment-form').querySelector('#pay-full-debt');if(full.checked)full.checked=false}});
 document.addEventListener('submit',async e=>{
+ if(e.target.id==='password-form'){
+   e.preventDefault();const form=e.target,error=document.getElementById('password-form-error'),currentPassword=form.elements.currentPassword.value,newPassword=form.elements.newPassword.value,confirmPassword=form.elements.confirmPassword.value,user=auth.currentUser;
+   error.hidden=true;error.textContent='';
+   const showError=message=>{error.textContent=message;error.hidden=false};
+   if(!currentPassword||!newPassword||!confirmPassword){showError('Completa todos los campos.');return}
+   if(newPassword!==confirmPassword){showError('Las contraseñas nuevas no coinciden.');return}
+   if(newPassword.length<6){showError('La nueva contraseña debe tener al menos 6 caracteres.');return}
+   if(newPassword===currentPassword){showError('La nueva contraseña debe ser distinta a la contraseña actual.');return}
+   if(!user||user.uid!==sessionUser?.uid||!user.email){showError('No se pudo verificar tu sesión. Vuelve a iniciar sesión.');return}
+   const button=form.querySelector('[type="submit"]');button.disabled=true;button.textContent='Actualizando…';
+   try{const credential=EmailAuthProvider.credential(user.email,currentPassword);await reauthenticateWithCredential(user,credential);await updatePassword(user,newPassword);form.reset();closeModal();toast('Contraseña actualizada correctamente.')}
+   catch(err){showError(passwordErrorMessage(err.code));form.elements.currentPassword.value='';form.elements.currentPassword.focus()}
+   finally{if(form.isConnected){button.disabled=false;button.textContent='Cambiar contraseña'}}
+   return;
+ }
  if(e.target.id==='login-form'){
    e.preventDefault();const form=e.target,fd=new FormData(form),username=String(fd.get('user')||'').trim().toLowerCase(),password=String(fd.get('password')||''),email=usernameEmails[username],error=document.getElementById('login-error');error.hidden=true;
    if(!email){showLoginError('Escribe uno de los usuarios habilitados: gerson, maribel, josue o benjamin.');return}

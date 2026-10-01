@@ -1173,7 +1173,11 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
 .login-submit{width:100%;height:46px;margin-top:17px}
 .login-notice{margin:16px 0 0;color:#a1a1aa;font-size:11px;line-height:1.5}
 .account-controls{display:grid;gap:4px}
-.account-controls .profile-button{cursor:default}
+.account-controls .profile-button{cursor:pointer}
+.account-controls .profile-button:hover{background:var(--surface-secondary)}
+.account-password-fields{display:grid;gap:14px}
+.password-form-error{margin:14px 0 0;padding:11px 13px;border-radius:9px;background:rgba(153,77,70,.1);color:var(--color-danger);font-size:13px;line-height:1.45}
+.password-form-error[hidden]{display:none}
 .signout-button{justify-self:start;margin-left:50px;padding:7px 12px;border:1px solid #FF00FF;border-radius:9px;background:#FF00FF;color:#FFFFFF;font:inherit;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(255,0,255,.18)}
 .signout-button:hover{background:#E600E6;border-color:#E600E6}
 .top-avatar.signout-icon{font-size:21px;cursor:pointer;background:#FF00FF;color:#FFFFFF}
