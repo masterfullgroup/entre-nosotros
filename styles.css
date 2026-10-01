@@ -1211,6 +1211,8 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
 .row-action-menu button:hover{background:var(--surface-secondary)}
 .row-action-menu button.danger-action{color:var(--color-danger)}
 .payment-item-total{margin-left:auto;text-align:right}
+.category-card .category-line .category-delete-button{border:0;background:transparent;color:var(--color-danger);font:inherit;font-size:12px;font-weight:600;padding:6px 9px;border-radius:8px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.category-card .category-line .category-delete-button:hover{background:var(--color-danger-soft);color:var(--color-danger)}
 @media(max-width:780px){.expense-card-mobile,:root:not([data-theme="light"]) .expense-card-mobile{grid-template-columns:40px minmax(0,1fr) auto auto;gap:8px}.expense-card-mobile .row-actions>summary{width:28px;height:28px}}
 .top-signout{display:none}
 @media(max-width:780px){
