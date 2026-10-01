@@ -1199,6 +1199,19 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
   :root:not([data-theme="light"]) .history-part em{display:block;margin:0;font-size:12px;line-height:1.35;white-space:normal}
   :root:not([data-theme="light"]) .member-history-row .status{grid-area:status;justify-self:start;align-self:start;display:inline-flex;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px;line-height:1.2;padding:5px 9px}
 }
+
+/* Compact row actions for admin expense and payment management. */
+.row-action-cell{width:42px;text-align:center}
+.row-actions{position:relative;display:inline-block;z-index:4}
+.row-actions>summary{list-style:none;display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--border-color);border-radius:9px;background:var(--surface-secondary);color:var(--text-secondary);font-size:18px;line-height:1;cursor:pointer;user-select:none}
+.row-actions>summary::-webkit-details-marker{display:none}
+.row-actions>summary:hover{color:var(--text-primary);border-color:var(--text-muted)}
+.row-action-menu{position:fixed;z-index:30;top:0;left:0;min-width:112px;padding:5px;border:1px solid var(--border-color);border-radius:10px;background:var(--surface-primary);box-shadow:0 8px 22px rgba(0,0,0,.22)}
+.row-action-menu button{display:block;width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:var(--text-primary);text-align:left;font-size:12px;white-space:nowrap}
+.row-action-menu button:hover{background:var(--surface-secondary)}
+.row-action-menu button.danger-action{color:var(--color-danger)}
+.payment-item-total{margin-left:auto;text-align:right}
+@media(max-width:780px){.expense-card-mobile,:root:not([data-theme="light"]) .expense-card-mobile{grid-template-columns:40px minmax(0,1fr) auto auto;gap:8px}.expense-card-mobile .row-actions>summary{width:28px;height:28px}}
 .top-signout{display:none}
 @media(max-width:780px){
   .top-signout{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 12px;border:1px solid #FF00FF;border-radius:10px;background:#FF00FF;color:#FFFFFF;font-size:12px;font-weight:700;line-height:1;white-space:nowrap;box-shadow:0 4px 12px rgba(255,0,255,.18)}
