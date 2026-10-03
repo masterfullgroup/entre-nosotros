@@ -323,6 +323,8 @@ async function completeSignIn(user){
 }
 
 function showLoginError(message){const error=document.getElementById('login-error');error.textContent=message;error.hidden=false}
+document.addEventListener('invalid',event=>{if(event.target.form?.id!=='login-form')return;event.preventDefault();showLoginError(event.target.name==='password'?'Escribe tu contraseña para continuar.':'Escribe tu nombre de usuario para continuar.')},true);
+document.addEventListener('input',event=>{if(event.target.form?.id==='login-form'&&event.target.form.checkValidity())document.getElementById('login-error').hidden=true});
 
 onAuthStateChanged(auth,async user=>{
   if(user){await completeSignIn(user);return}
