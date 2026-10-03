@@ -16,10 +16,10 @@ Completa los cuatro correos de Authentication en `firebase.js` y en `github-publ
 
 El estado de Authentication se restaura al recargar. Después de leer `usuarios/{uid}`, la aplicación escucha en tiempo real las colecciones compartidas de Firestore:
 
-- `gastos/{id}`: `date`, `createdAt`, `updatedAt`, `description`, `category`, `subcategory`, `beneficiary`, `amount`, `paidBy` y `paidByUsername`/`paidByUid`, `participants` y sus `participantUsernames`/`participantUids`, `distribution`, `allocations` (cuando corresponde), `receipt`, `notes`, `active`/`status`, y los UID/nombres de usuario que registraron y actualizaron el gasto.
-- `pagos/{id}`: `personId`, `personUsername`, `personUid`, `amount`, `date`, `method`, `concept`, `note`, `receipt`, `createdAt`, `updatedAt`, y los UID/nombres de usuario que registraron y actualizaron el pago.
+- `gastos/{id}`: `date`, `description`, `category`, `expenseType`, `beneficiary`, `amount`, `paidBy`, `participants`, `distribution`, `allocations`, `receipt` y `notes`. `subcategory` se conserva como alias compatible del tipo; los documentos antiguos se migran agregando `expenseType` y un beneficiario normalizado, con tipo `Otros` cuando no se puede deducir.
+- `pagos/{id}`: `payerId`/`personId`, `payeeId`, `amount`, `date`, `method`, `note` y `receipt`. Los pagos antiguos sin `payeeId` se interpretan como pagos a Gerson.
 - `historial/{id}`: `type`, `text`, `date`, `time`, `createdAt`, `actorUid`, `actorUsername`, `actorName`, `entityId` y `action`.
-- `configuracion/categorias` (documento): `items` con las categorías/subcategorías y metadatos de actualización.
+- `configuracion/categorias` (documento): `items` con categorías y tipos de gasto, `beneficiaries` con destinos activos/inactivos, `priorDebts` con saldos iniciales independientes y metadatos de actualización. El cliente mantiene el alias antiguo `subs` en los tipos para que otros despliegues sigan leyendo la configuración.
 
 Gastos, pagos e historial se guardan en Firestore mediante escrituras por lotes y se actualizan en las vistas con listeners `onSnapshot`. Las categorías también se sincronizan entre dispositivos. No se importan gastos, pagos ni historial de los antiguos datos locales de demostración; al iniciar la integración solo se puede conservar la definición local de categorías para inicializar `configuracion/categorias` si aún no existe.
 

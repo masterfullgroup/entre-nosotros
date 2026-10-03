@@ -1204,6 +1204,35 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
   :root:not([data-theme="light"]) .member-history-row .status{grid-area:status;justify-self:start;align-self:start;display:inline-flex;flex-wrap:wrap;width:fit-content;max-width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere;text-align:center;font-size:11px;line-height:1.2;padding:5px 9px}
 }
 
+/* Categories, beneficiary management and expense form refresh. */
+.category-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.category-card{min-width:0;padding:18px}
+.category-card-head{display:flex;align-items:center;gap:12px;min-width:0}
+.category-title{min-width:0;flex:1}
+.category-title .panel-title{font-size:18px}
+.category-card-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:20px;padding:10px 0;border-bottom:1px solid var(--border-color);color:var(--text-secondary);font-size:13px;font-weight:650}
+.category-card-toolbar .button{white-space:nowrap}
+.category-card .category-line{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;font-size:14px}
+.category-actions{flex:none}
+.category-actions>summary{width:34px;height:34px;font-size:19px}
+.category-empty{padding:16px 0;color:var(--text-muted);font-size:13px}
+.category-card.is-inactive{opacity:.72}
+.beneficiary-panel{max-width:none!important;margin-top:20px;padding:0 20px 20px}
+.beneficiary-panel .panel-header{padding-inline:0}
+.beneficiary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.beneficiary-row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;padding:12px 14px;border:1px solid var(--border-color);border-radius:12px;background:var(--surface-secondary)}
+.beneficiary-row>div:first-child{display:grid;gap:8px;min-width:0}
+.beneficiary-row strong{overflow-wrap:anywhere;color:var(--text-primary);font-size:14px}
+.beneficiary-row .status{justify-self:start}
+.participants-field{border:0;padding:0;margin:0;min-width:0}
+.participants-field legend{margin-bottom:7px;color:var(--text-secondary);font-size:13px;font-weight:650}
+.distribution-total{margin-top:7px;padding-top:10px;border-top:1px solid var(--border-color)}
+.form-field [hidden]{display:none}
+.payment-item{min-width:0}
+@media(min-width:781px) and (max-width:1200px){.category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.beneficiary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:780px){.category-grid{grid-template-columns:1fr}.beneficiary-panel{padding:0 14px 14px}.beneficiary-grid{grid-template-columns:1fr 1fr}.beneficiary-panel .panel-header{align-items:flex-start;gap:10px}.beneficiary-panel .panel-header .button{white-space:nowrap}}
+@media(max-width:480px){.beneficiary-grid{grid-template-columns:1fr}.category-card{padding:15px}.category-card .category-line{font-size:13px}}
+
 /* Compact row actions for admin expense and payment management. */
 .row-action-cell{width:42px;text-align:center}
 .row-actions{position:relative;display:inline-block;z-index:4}
