@@ -323,6 +323,7 @@ async function completeSignIn(user){
 }
 
 function showLoginError(message){const error=document.getElementById('login-error');error.textContent=message;error.hidden=false}
+document.addEventListener('click',event=>{const button=event.target.closest('#login-form button[type="submit"]');if(!button)return;const form=button.form;if(form.checkValidity())return;event.preventDefault();showLoginError(form.elements.user.validity.valueMissing?'Escribe tu nombre de usuario para continuar.':'Escribe tu contraseña para continuar.')},true);
 document.addEventListener('invalid',event=>{if(event.target.form?.id!=='login-form')return;event.preventDefault();showLoginError(event.target.name==='password'?'Escribe tu contraseña para continuar.':'Escribe tu nombre de usuario para continuar.')},true);
 document.addEventListener('input',event=>{if(event.target.form?.id==='login-form'&&event.target.form.checkValidity())document.getElementById('login-error').hidden=true});
 
