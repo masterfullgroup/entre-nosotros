@@ -1228,6 +1228,7 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
 .participants-field legend{margin-bottom:7px;color:var(--text-secondary);font-size:13px;font-weight:650}
 .distribution-total{margin-top:7px;padding-top:10px;border-top:1px solid var(--border-color)}
 .form-field [hidden]{display:none}
+[data-debt-choice][hidden]{display:none}
 .payment-item{min-width:0}
 @media(min-width:781px) and (max-width:1200px){.category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.beneficiary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:780px){.category-grid{grid-template-columns:1fr}.beneficiary-panel{padding:0 14px 14px}.beneficiary-grid{grid-template-columns:1fr 1fr}.beneficiary-panel .panel-header{align-items:flex-start;gap:10px}.beneficiary-panel .panel-header .button{white-space:nowrap}}
@@ -1265,3 +1266,4 @@ html,body,.main-area,.page-content{background:var(--bg-primary);color:var(--text
   .top-signout:hover{background:#E600E6;border-color:#E600E6}
   .top-avatar.signout-icon{display:none}
 }
+
