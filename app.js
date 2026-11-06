@@ -402,6 +402,7 @@ document.addEventListener('change',e=>{const key={'filter-beneficiary':'benefici
 document.addEventListener('change',e=>{
   const form=e.target.closest('#payment-form');if(!form)return;
   if(e.target.id==='pay-full-debt'&&e.target.checked){const amount=form.querySelector('[name="amount"]');amount.value=Number(form.dataset.currentDebt||0).toFixed(2);return}
+  if(e.target.name==='debtId'&&form.elements.allocationMode?.value==='specific'&&e.target.value){const previous=store.payments.find(payment=>payment.id===form.dataset.editId);form.elements.amount.value=selectedPaymentDebtBalance(form,previous?.id||null).toFixed(2)}
   if(['personId','payeeId','debtId','allocationMode'].includes(e.target.name))refreshPaymentDebtForm(form);
 });
 document.addEventListener('input',e=>{if(e.target.name==='amount'&&e.target.closest('#payment-form')){const full=e.target.closest('#payment-form').querySelector('#pay-full-debt');if(full?.checked)full.checked=false}});
